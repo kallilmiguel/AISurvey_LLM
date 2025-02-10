@@ -1,0 +1,7 @@
+gradio
+google-generativeai
+transformers
+torch
+python-dotenv
+PyPDF2
+latex
