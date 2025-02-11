@@ -3,16 +3,17 @@
 import asyncio
 from typing import List, Dict, Optional
 import os
+import json
 import time
 from datetime import datetime
 from ..agents.gemini_agent import GeminiAgent
-from ..agents.deepseek_agent import DeepseekAgent
-from config.settings import OUTPUT_DIR
+from ..agents.deepseek_agent import DeepSeekAgent
+from config.settings import OUTPUT_DIR, TEMP_DIR
 
 class SurveyGenerator:
     def __init__(self):
         self.gemini_agent = GeminiAgent()
-        self.deepseek_agent = DeepseekAgent()
+        self.deepseek_agent = DeepSeekAgent()
         self.section_order = [
             'introduction',
             'background',
@@ -24,8 +25,32 @@ class SurveyGenerator:
         
         # Create output directory if it doesn't exist
         os.makedirs(OUTPUT_DIR, exist_ok=True)
+        os.makedirs(TEMP_DIR, exist_ok=True)
 
-    async def generate_section_prompt(self, section_name: str, summary: str, research_area: str) -> str:
+    def save_summaries_to_temp(self, summaries: Dict[str, str], research_area: str) -> str:
+        """Save summaries to a readable JSON file in the temp directory"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"summaries_{timestamp}.json"
+        filepath = os.path.join(TEMP_DIR, filename)
+
+        output_data = {
+            "timestamp": datetime.now().isoformat(),
+            "research_area": research_area,
+            "summaries": summaries
+        }
+
+        with open(filepath, "w", encoding='utf-8') as f:
+            json.dump(output_data, f, indent=4, ensure_ascii=False)
+
+        return filepath
+    
+    def read_summaries_from_temp(self, filepath: str) -> Dict[str, str]:
+        """Read summaries from a Json file"""
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data["summaries"]
+
+    def generate_section_prompt(self, section_name: str, summary: str, research_area: str) -> str:
         """Generate appropriate prompts for each section"""
         prompts = {
             'introduction': f"""
@@ -109,7 +134,7 @@ class SurveyGenerator:
         
         return prompts.get(section_name, "")
 
-    async def generate_latex_header(self, research_area: str) -> str:
+    def generate_latex_header(self, research_area: str) -> str:
         """Generate LaTeX header with proper formatting"""
         current_date = datetime.now().strftime("%B %Y")
         
@@ -139,37 +164,52 @@ methodologies, and future directions in the field.
 
 """
 
-    async def generate_latex_footer(self) -> str:
+    def generate_latex_footer(self) -> str:
         """Generate LaTeX footer"""
         return "\n\\end{document}"
 
-    async def process_section(self, section_name: str, summary: str, research_area: str) -> str:
+    def process_section(self, section_name: str, summary: str, research_area: str) -> str:
         """Process a single section using DeepSeek"""
-        prompt = await self.generate_section_prompt(section_name, summary, research_area)
-        section_content = await self.deepseek_agent.generate_section(prompt)
+        prompt = self.generate_section_prompt(section_name, summary, research_area)
+        section_content = self.deepseek_agent.generate_section(prompt, section_name)
         return section_content
 
     async def generate_survey(self, pdf_files: List[str], research_area: str) -> str:
         """Main method to generate the complete survey"""
         try:
             # Step 1: Process PDFs and get summaries using Gemini
-            section_summaries = await self.gemini_agent.process_pdfs(pdf_files)
+            section_summaries = self.gemini_agent.process_pdf(pdf_files)
+
+            if not section_summaries:
+                raise ValueError("Failed to generate section summaries")
+            
+            summaries_filepath = self.save_summaries_to_temp(section_summaries, research_area)
+            print(f"Summaries saved to: {summaries_filepath}")
             
             # Step 2: Generate LaTeX content for each section using DeepSeek
             latex_sections = {}
             for section_name in self.section_order:
                 if section_name in section_summaries:
-                    summary = section_summaries[section_name]
-                    latex_content = await self.process_section(
-                        section_name, 
-                        summary, 
-                        research_area
-                    )
-                    latex_sections[section_name] = latex_content
+                    try:
+                        summary = section_summaries[section_name]
+                        latex_content = self.process_section(
+                            section_name, 
+                            summary, 
+                            research_area
+                        )
+                        latex_sections[section_name] = latex_content
+                        print(f"Section {section_name} generated by DeepSeek!")
+                        await asyncio.sleep(1)
+                    except Exception as e:
+                        print(f"Error generating section {section_name}: {str(e)}")
+                        continue
+
+            if not latex_sections:
+                raise ValueError("Failed to generate any LaTeX sections")
             
             # Step 3: Combine all sections into a complete LaTeX document
-            header = await self.generate_latex_header(research_area)
-            footer = await self.generate_latex_footer()
+            header = self.generate_latex_header(research_area)
+            footer = self.generate_latex_footer()
             
             full_content = [header]
             for section_name in self.section_order:

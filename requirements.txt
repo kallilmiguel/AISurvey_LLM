@@ -6,3 +6,4 @@ python-dotenv
 PyPDF2
 latex
 PyMuPDF
+openai>=1.0.0

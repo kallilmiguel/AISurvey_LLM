@@ -96,7 +96,7 @@ class PDFBatchProcessor:
         self.pdf_handler = PDFHandler()
         os.makedirs(TEMP_DIR, exist_ok=True)
 
-    async def process_uploaded_files(self, files: List[str]) -> Dict[str, List[str]]:
+    def process_uploaded_files(self, files: List[str]) -> Dict[str, List[str]]:
         """Process multiple PDF files and organize their sections"""
         all_sections = {
             'introduction': [],

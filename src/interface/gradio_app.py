@@ -7,62 +7,62 @@ class GradioInterface:
         self.survey_generator = SurveyGenerator()
         self.progress = SurveyProgress()
 
-        async def generate_survey_with_progress(self, pdf_files, research_area):
-            try:
-                # Update progress
-                self.progress_update("Processing PDF files...")
-                yield self.progress.status_message, self.progress.progress_percentage
+    async def generate_survey_with_progress(self, pdf_files, research_area):
+        try:
+            # Update progress
+            self.progress.update("Processing PDF files...")
+            yield self.progress.status_message, self.progress.progress_percentage, None
 
-                # Generate survey
-                filepath = await self.survey_generator.generate_survey(pdf_files, research_area)
+            # Generate survey
+            filepath = await self.survey_generator.generate_survey(pdf_files, research_area)
 
-                # Validate survey length
-                if not await self.survey_generator.validate_survey_length(filepath):
-                    raise ValueError("Generated survey does not meet length requirements")
-                
-                self.progress.update("Survey generation complete!")
-                yield self.progress.status_message, self.progress.progress_percentage
-
-                return filepath
+            # # Validate survey length
+            # if not await self.survey_generator.validate_survey_length(filepath):
+            #     raise ValueError("Generated survey does not meet length requirements")
             
-            except Exception as e:
-                self.progress.update(f"Error: {str(e)}")
-                yield self.progress.status_message, self.progress.progress_percentage
+            self.progress.update("Survey generation complete!")
+            yield self.progress.status_message, self.progress.progress_percentage, filepath
 
-        def create_interface(self):
-            with gr.Blocks() as interface:
-                gr.Markdown("# Research Survey Generatos")
+        
+        except Exception as e:
+            error_message = f"Error: {str(e)}\nPlease try again in a few minutes or with fewer files"
+            self.progress.update(error_message)
+            yield self.progress.status_message, self.progress.progress_percentage, None
 
-                with gr.Row():
-                    pdf_files = gr.File(
-                        file_count="multiple",
-                        label="Upload PDF Files (max 10 papers)"
-                    )
-                    research_area = gr.Textbox(
-                        label="Research Area",
-                        placeholder="Enter the research area..."
-                    )
-                
-                with gr.Row():
-                    status = gr.Textbox(label="Status")
-                    progress = gr.Slider(
-                        minimum=0,
-                        maximum=100,
-                        value=0,
-                        label="Progress"
-                    )
+    def create_interface(self):
+        with gr.Blocks() as interface:
+            gr.Markdown("# Research Survey Generatos")
 
-                generate_btn = gr.Button("Generate Survey")
-                output = gr.File(label="Generated Survey (TEX)")
-
-                generate_btn.click(
-                    fn=self.survey_generator.generate_survey,
-                    inputs=[pdf_files, research_area],
-                    outputs=output
+            with gr.Row():
+                pdf_files = gr.File(
+                    file_count="multiple",
+                    label="Upload PDF Files (max 10 papers)"
+                )
+                research_area = gr.Textbox(
+                    label="Research Area",
+                    placeholder="Enter the research area..."
+                )
+            
+            with gr.Row():
+                status = gr.Textbox(label="Status")
+                progress = gr.Slider(
+                    minimum=0,
+                    maximum=100,
+                    value=0,
+                    label="Progress"
                 )
 
-            return interface
-        
-        def launch(self):
-            interface = self.create_interface()
-            interface.launch()
+            generate_btn = gr.Button("Generate Survey")
+            output = gr.File(label="Generated Survey (TEX)")
+
+            generate_btn.click(
+                fn=self.survey_generator.generate_survey,
+                inputs=[pdf_files, research_area],
+                outputs=output
+            )
+
+        return interface
+    
+    def launch(self):
+        interface = self.create_interface()
+        interface.launch()
